@@ -2,7 +2,7 @@
 // States: "home" -> "game" -> "game_over" -> "home"
 
 import { Game } from "./game.js";
-import { Renderer, WINDOW_W, WINDOW_H } from "./renderer.js";
+import { Renderer, WINDOW_W, WINDOW_H, GRID_BOTTOM_CENTER_Y } from "./renderer.js";
 import { Audio } from "./audio.js";
 
 const canvas = document.getElementById("game");
@@ -29,6 +29,7 @@ const audio = new Audio();
 let state = "home";
 let drag = null;
 let mousePos = { x: 0, y: 0 };
+
 
 function eventPos(ev) {
   const rect = canvas.getBoundingClientRect();
@@ -73,15 +74,42 @@ function onMouseDown(ev) {
   }
 
   if (state === "game" && drag === null) {
+    if (renderer.hitTitleButton(pos)) {
+      audio.play("pick");
+      state = "confirm_quit";
+      return;
+    }
     const idx = renderer.trayPieceAt(pos.x, pos.y, game);
     if (idx !== null) {
+      // Lift the piece up so its anchor sits at the grid's bottom row.
+      // Remember the offset (finger -> piece) so the piece keeps that gap
+      // as the finger moves up.
+      const liftOffset = Math.max(0, pos.y - GRID_BOTTOM_CENTER_Y);
+      const ly = pos.y - liftOffset;
       drag = {
         pieceIndex: idx,
         piece: game.pieces[idx],
-        mouse: [pos.x, pos.y],
-        origin: null,
+        mouse: [pos.x, ly],
+        liftOffset,
+        origin: renderer.placementOrigin(game.pieces[idx], renderer.cellAt(pos.x, ly)),
       };
       audio.play("pick");
+    }
+    return;
+  }
+
+  if (state === "confirm_quit") {
+    const hit = renderer.hitConfirmButton(pos);
+    if (hit === "yes") {
+      audio.play("pick");
+      renderer.resetAnimations();
+      drag = null;
+      state = "home";
+    } else if (hit === "no") {
+      audio.play("pick");
+      state = "game";
+    } else if (hit !== null) {
+      audio.play("invalid");
     }
     return;
   }
@@ -100,8 +128,9 @@ function onMouseMove(ev) {
   const pos = eventPos(ev);
   mousePos = pos;
   if (state === "game" && drag !== null) {
-    drag.mouse = [pos.x, pos.y];
-    const cell = renderer.cellAt(pos.x, pos.y);
+    const ly = pos.y - drag.liftOffset;
+    drag.mouse = [pos.x, ly];
+    const cell = renderer.cellAt(pos.x, ly);
     drag.origin = renderer.placementOrigin(drag.piece, cell);
   }
 }
@@ -137,10 +166,14 @@ canvas.addEventListener("touchend", (ev) => { ev.preventDefault(); onMouseUp(ev)
 
 // ESC -> back to home from game/game_over
 window.addEventListener("keydown", (ev) => {
-  if (ev.key === "Escape" && state !== "home") {
-    drag = null;
-    renderer.resetAnimations();
-    state = "home";
+  if (ev.key === "Escape") {
+    if (state === "confirm_quit") {
+      state = "game";
+    } else if (state !== "home") {
+      drag = null;
+      renderer.resetAnimations();
+      state = "home";
+    }
   }
 });
 
@@ -162,6 +195,7 @@ function frame(now) {
   } else {
     renderer.draw(game, drag);
     if (state === "game_over") renderer.drawDeathScreen(game, mousePos);
+    else if (state === "confirm_quit") renderer.drawConfirmQuit(mousePos);
   }
 
   requestAnimationFrame(frame);

@@ -76,19 +76,18 @@ export class Audio {
   }
 
   _build() {
-    // pickup — bright rising blip
+    // pickup / button click — short low descending "tup"
     {
-      const s = sweep(700, 1150, 0.06);
-      const e = envelope(s.length, 0.003, 0.04);
-      this.buffers.pick = this._toBuffer(mulArr(s, e), 0.22);
+      const s = sweep(320, 140, 0.035);
+      const e = envelope(s.length, 0.0008, 0.028);
+      this.buffers.pick = this._toBuffer(mulArr(s, e), 0.26);
     }
 
-    // place — confident two-tone click
+    // place — snappy low "thock" when piece locks into the grid
     {
-      const n = Math.floor(0.12 * SAMPLE_RATE);
-      const a = add(tone(880, 0.12), mulScalar(tone(1320, 0.12), 0.5));
-      const b = add(a, mulScalar(tone(220, 0.12, "square"), 0.2));
-      this.buffers.place = this._toBuffer(mulArr(b, envelope(n, 0.003, 0.07)), 0.32);
+      const n = Math.floor(0.05 * SAMPLE_RATE);
+      const body = add(tone(110, 0.05, "square"), mulScalar(tone(180, 0.05, "sine"), 0.5));
+      this.buffers.place = this._toBuffer(mulArr(body, envelope(n, 0.0008, 0.04)), 0.34);
     }
 
     // invalid — low buzz

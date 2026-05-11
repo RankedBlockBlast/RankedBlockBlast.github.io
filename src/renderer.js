@@ -6,20 +6,23 @@ import { PlacePop, LineClear } from "./animations.js";
 const GRID_SIZE = 8;
 const CELL = 56;
 const GRID_PX = GRID_SIZE * CELL;
-const MARGIN_X = 56;
+const MARGIN_X = 20;
 const HUD_HEIGHT = 120;
 const TRAY_HEIGHT = 200;
 
 export const WINDOW_W = GRID_PX + 2 * MARGIN_X;
 export const WINDOW_H = HUD_HEIGHT + GRID_PX + TRAY_HEIGHT;
+// Y-coordinate (in internal pixels) of the center of the grid's last row.
+// Used to clamp the held piece so its bottom never sinks below the grid.
+export const GRID_BOTTOM_CENTER_Y = HUD_HEIGHT + (GRID_SIZE - 1) * CELL + CELL / 2;
 
 const GRID_TOP = HUD_HEIGHT;
 const GRID_LEFT = MARGIN_X;
 const TRAY_TOP = GRID_TOP + GRID_PX + 24;
 
 const BG = [5, 1, 15];
-const GRID_LINE = [40, 30, 80];
-const EMPTY_CELL = [12, 8, 28];
+const GRID_LINE = [80, 65, 140];
+const EMPTY_CELL = [26, 20, 50];
 const HUD_CYAN = [0, 240, 255];
 const HUD_MAGENTA = [255, 0, 229];
 const INVALID = [255, 50, 80];
@@ -32,34 +35,22 @@ const BTN_CYAN = [0, 240, 255];
 const BTN_PURPLE = [177, 74, 237];
 const BTN_MUTED = [170, 190, 230];
 
+// Anchor is the bottom-most cube of the piece (max row), tie-broken by
+// the column nearest the shape's horizontal centroid. The cursor maps to
+// this cell, so the rest of the piece always extends upward from the finger.
 const _anchorCache = new Map();
 function anchorCell(shape) {
   const key = shape.map((p) => p.join(",")).join("|");
   const cached = _anchorCache.get(key);
   if (cached) return cached;
-  const set = new Set(shape.map((p) => p.join(",")));
-  const counts = [];
-  for (const [r, c] of shape) {
-    let n = 0;
-    for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-      if (set.has(`${r + dr},${c + dc}`)) n++;
-    }
-    counts.push([[r, c], n]);
-  }
-  const best = Math.max(...counts.map(([, n]) => n));
-  const candidates = counts.filter(([, n]) => n === best).map(([cell]) => cell);
+  const maxRow = Math.max(...shape.map(([r]) => r));
+  const candidates = shape.filter(([r]) => r === maxRow);
   let anchor;
   if (candidates.length === 1) {
     anchor = candidates[0];
   } else {
-    let cr = 0, cc = 0;
-    for (const [r, c] of shape) { cr += r; cc += c; }
-    cr /= shape.length; cc /= shape.length;
-    anchor = candidates.reduce((a, b) => {
-      const da = (a[0] - cr) ** 2 + (a[1] - cc) ** 2;
-      const db = (b[0] - cr) ** 2 + (b[1] - cc) ** 2;
-      return da <= db ? a : b;
-    });
+    const cc = shape.reduce((s, [, c]) => s + c, 0) / shape.length;
+    anchor = candidates.reduce((a, b) => (Math.abs(a[1] - cc) <= Math.abs(b[1] - cc) ? a : b));
   }
   _anchorCache.set(key, anchor);
   return anchor;
@@ -102,6 +93,9 @@ export class Renderer {
     this._homeButtons = this._layoutHomeButtons();
     this._multiplayerButtons = this._layoutMultiplayerButtons();
     this._continueButton = this._layoutContinueButton();
+    this._confirmButtons = this._layoutConfirmButtons();
+    // HUD title click area — kept generous for touch.
+    this._titleRect = { x: 0, y: 14, w: WINDOW_W * 0.7, h: 60 };
   }
 
   _layoutHomeButtons() {
@@ -142,6 +136,18 @@ export class Renderer {
     return { x, y, w: BUTTON_W, h: BUTTON_H };
   }
 
+  _layoutConfirmButtons() {
+    const gap = 16;
+    const w = Math.floor((BUTTON_W - gap) / 2);
+    const y = Math.floor(WINDOW_H / 2) + 30;
+    const totalW = w * 2 + gap;
+    const xStart = Math.floor(WINDOW_W / 2 - totalW / 2);
+    return {
+      yes: { rect: { x: xStart, y, w, h: BUTTON_H }, label: "YES", color: INVALID },
+      no: { rect: { x: xStart + w + gap, y, w, h: BUTTON_H }, label: "NO", color: BTN_CYAN },
+    };
+  }
+
   hitHomeButton(pos) {
     for (const [key, { rect }] of Object.entries(this._homeButtons)) {
       if (rectIn(rect, pos.x, pos.y)) return key;
@@ -151,6 +157,17 @@ export class Renderer {
 
   hitMultiplayerButton(pos) {
     for (const [key, { rect }] of Object.entries(this._multiplayerButtons)) {
+      if (rectIn(rect, pos.x, pos.y)) return key;
+    }
+    return null;
+  }
+
+  hitTitleButton(pos) {
+    return rectIn(this._titleRect, pos.x, pos.y);
+  }
+
+  hitConfirmButton(pos) {
+    for (const [key, { rect }] of Object.entries(this._confirmButtons)) {
       if (rectIn(rect, pos.x, pos.y)) return key;
     }
     return null;
@@ -253,6 +270,25 @@ export class Renderer {
     ctx.fillText("// CHOOSE  MODE  //", WINDOW_W / 2, 285);
 
     for (const { rect, label, color } of Object.values(this._multiplayerButtons)) {
+      this._drawButton(rect, label, color, rectIn(rect, mousePos.x, mousePos.y));
+    }
+  }
+
+  drawConfirmQuit(mousePos) {
+    const ctx = this.ctx;
+    ctx.fillStyle = "rgba(0,0,0,0.78)";
+    ctx.fillRect(0, 0, WINDOW_W, WINDOW_H);
+
+    this._drawGlowText("QUIT TO MENU?", WINDOW_W / 2, WINDOW_H / 2 - 60,
+      HUD_MAGENTA, font(36), "center", 14);
+
+    ctx.font = font(16);
+    ctx.fillStyle = rgb([180, 200, 255]);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("// PROGRESS WILL BE LOST //", WINDOW_W / 2, WINDOW_H / 2 - 18);
+
+    for (const { rect, label, color } of Object.values(this._confirmButtons)) {
       this._drawButton(rect, label, color, rectIn(rect, mousePos.x, mousePos.y));
     }
   }
@@ -543,7 +579,7 @@ export class Renderer {
 
   // ---------- text glow ----------
 
-  _drawGlowText(text, x, y, color, fontStr, align, blur = 14) {
+  _drawGlowText(text, x, y, color, fontStr, align, blur = 10) {
     const ctx = this.ctx;
     ctx.font = fontStr;
     ctx.textAlign = align;
@@ -551,7 +587,6 @@ export class Renderer {
     ctx.fillStyle = rgb(color);
     ctx.shadowColor = rgb(color);
     ctx.shadowBlur = blur;
-    ctx.fillText(text, x, y);
     ctx.fillText(text, x, y);
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";

@@ -100,6 +100,7 @@ export class Renderer {
     this._scanlines = this._buildScanlines();
     this.animations = [];
     this._homeButtons = this._layoutHomeButtons();
+    this._multiplayerButtons = this._layoutMultiplayerButtons();
     this._continueButton = this._layoutContinueButton();
   }
 
@@ -119,6 +120,22 @@ export class Renderer {
     return result;
   }
 
+  _layoutMultiplayerButtons() {
+    const firstY = 380;
+    const specs = [
+      ["timer", "TIMER", BTN_CYAN],
+      ["points", "MOST POINTS", BTN_PURPLE],
+      ["back", "BACK", BTN_MUTED],
+    ];
+    const result = {};
+    specs.forEach(([key, label, color], i) => {
+      const x = Math.floor(WINDOW_W / 2 - BUTTON_W / 2);
+      const y = firstY + i * (BUTTON_H + BUTTON_GAP);
+      result[key] = { rect: { x, y, w: BUTTON_W, h: BUTTON_H }, label, color };
+    });
+    return result;
+  }
+
   _layoutContinueButton() {
     const x = Math.floor(WINDOW_W / 2 - BUTTON_W / 2);
     const y = Math.floor(WINDOW_H / 2) + 80;
@@ -127,6 +144,13 @@ export class Renderer {
 
   hitHomeButton(pos) {
     for (const [key, { rect }] of Object.entries(this._homeButtons)) {
+      if (rectIn(rect, pos.x, pos.y)) return key;
+    }
+    return null;
+  }
+
+  hitMultiplayerButton(pos) {
+    for (const [key, { rect }] of Object.entries(this._multiplayerButtons)) {
       if (rectIn(rect, pos.x, pos.y)) return key;
     }
     return null;
@@ -212,6 +236,25 @@ export class Renderer {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("v 0 . 1", WINDOW_W / 2, WINDOW_H - 32);
+  }
+
+  drawMultiplayer(mousePos) {
+    const ctx = this.ctx;
+    ctx.fillStyle = rgb(BG);
+    ctx.fillRect(0, 0, WINDOW_W, WINDOW_H);
+    ctx.drawImage(this._scanlines, 0, 0);
+
+    this._drawGlowText("MULTIPLAYER", WINDOW_W / 2, 210, HUD_MAGENTA, font(48), "center", 18);
+
+    ctx.font = font(16);
+    ctx.fillStyle = rgb([160, 180, 220]);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("// CHOOSE  MODE  //", WINDOW_W / 2, 285);
+
+    for (const { rect, label, color } of Object.values(this._multiplayerButtons)) {
+      this._drawButton(rect, label, color, rectIn(rect, mousePos.x, mousePos.y));
+    }
   }
 
   drawDeathScreen(game, mousePos) {

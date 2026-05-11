@@ -7,13 +7,20 @@ import { Audio } from "./audio.js";
 
 const canvas = document.getElementById("game");
 
-// scale canvas for high-DPI displays
-const dpr = window.devicePixelRatio || 1;
-canvas.width = WINDOW_W * dpr;
-canvas.height = WINDOW_H * dpr;
-canvas.style.width = WINDOW_W + "px";
-canvas.style.height = WINDOW_H + "px";
-canvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+// Fit canvas to viewport while keeping the internal WINDOW_W x WINDOW_H coordinate system.
+// Internal bitmap stays at WINDOW_W*dpr so rendering quality doesn't drop on shrink.
+function fitCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const scale = Math.min(window.innerWidth / WINDOW_W, window.innerHeight / WINDOW_H);
+  canvas.width = WINDOW_W * dpr;
+  canvas.height = WINDOW_H * dpr;
+  canvas.style.width = WINDOW_W * scale + "px";
+  canvas.style.height = WINDOW_H * scale + "px";
+  canvas.getContext("2d").setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+fitCanvas();
+window.addEventListener("resize", fitCanvas);
+window.addEventListener("orientationchange", fitCanvas);
 
 const game = new Game();
 const renderer = new Renderer(canvas);
@@ -25,8 +32,10 @@ let mousePos = { x: 0, y: 0 };
 
 function eventPos(ev) {
   const rect = canvas.getBoundingClientRect();
-  const t = ev.touches ? ev.touches[0] : ev;
-  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+  const t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
+  const sx = WINDOW_W / rect.width;
+  const sy = WINDOW_H / rect.height;
+  return { x: (t.clientX - rect.left) * sx, y: (t.clientY - rect.top) * sy };
 }
 
 function onMouseDown(ev) {
@@ -43,6 +52,20 @@ function onMouseDown(ev) {
       drag = null;
       audio.play("pick");
       state = "game";
+    } else if (hit === "multi") {
+      audio.play("pick");
+      state = "multiplayer";
+    } else if (hit !== null) {
+      audio.play("invalid");
+    }
+    return;
+  }
+
+  if (state === "multiplayer") {
+    const hit = renderer.hitMultiplayerButton(pos);
+    if (hit === "back") {
+      audio.play("pick");
+      state = "home";
     } else if (hit !== null) {
       audio.play("invalid");
     }
@@ -134,6 +157,8 @@ function frame(now) {
 
   if (state === "home") {
     renderer.drawHome(mousePos);
+  } else if (state === "multiplayer") {
+    renderer.drawMultiplayer(mousePos);
   } else {
     renderer.draw(game, drag);
     if (state === "game_over") renderer.drawDeathScreen(game, mousePos);

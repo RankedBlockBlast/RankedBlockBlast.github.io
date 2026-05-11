@@ -191,11 +191,11 @@ export class Renderer {
     ctx.globalAlpha = (120 * pulse) / 255;
     ctx.fillStyle = rgb(HUD_MAGENTA);
     for (const [dx, dy] of [[-4, 0], [4, 0], [0, -4], [0, 4]]) {
-      ctx.fillText("BLOCK  BOOM", WINDOW_W / 2 + dx, 210 + dy);
+      ctx.fillText("BLOCK  BLAST", WINDOW_W / 2 + dx, 210 + dy);
     }
     ctx.globalAlpha = 1;
 
-    this._drawGlowText("BLOCK  BOOM", WINDOW_W / 2, 210, HUD_MAGENTA, font(64), "center", 22);
+    this._drawGlowText("BLOCK  BLAST", WINDOW_W / 2, 210, HUD_MAGENTA, font(64), "center", 22);
 
     ctx.font = font(16);
     ctx.fillStyle = rgb([160, 180, 220]);
@@ -307,7 +307,7 @@ export class Renderer {
 
   _drawHud(game) {
     const ctx = this.ctx;
-    this._drawGlowText("BLOCK  BLAST", MARGIN_X, 44, HUD_CYAN, font(28), "left", 14);
+    this._drawGlowText("RANKED  BLOCK  BLAST", MARGIN_X, 44, HUD_CYAN, font(22), "left", 14);
 
     this._drawGlowText(String(game.score), WINDOW_W - MARGIN_X, 48, HUD_MAGENTA,
       font(56), "right", 16);

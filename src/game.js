@@ -5,12 +5,14 @@ import { SHAPES, NEON_COLORS } from "./shapes.js";
 export const GRID_SIZE = 8;
 const PIECES_PER_REFILL = 3;
 
+// Difficulty assist: bias new pieces toward shapes that can clear lines.
+// Starts generous, decays each time the assist actually fires.
+const PERFECT_START = 0.5;
+const PERFECT_FLOOR = 0.2;
+const PERFECT_DECAY = 0.03;
+
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function newPiece() {
-  return { shape: pick(SHAPES), color: pick(NEON_COLORS) };
 }
 
 export class Game {
@@ -18,8 +20,61 @@ export class Game {
     this.grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
     this.score = 0;
     this.highScore = 0;
-    this.pieces = [newPiece(), newPiece(), newPiece()];
+    this.perfectChance = PERFECT_START;
+    this.pieces = [this._makePiece(), this._makePiece(), this._makePiece()];
     this.gameOver = false;
+  }
+
+  _makePiece() {
+    let shape = null;
+    if (Math.random() < this.perfectChance) {
+      shape = this._findPerfectShape();
+      if (shape) {
+        this.perfectChance = Math.max(PERFECT_FLOOR, this.perfectChance - PERFECT_DECAY);
+      }
+    }
+    if (!shape) shape = pick(SHAPES);
+    return { shape, color: pick(NEON_COLORS) };
+  }
+
+  // Shape whose best placement clears the most lines (>=1). null if none.
+  _findPerfectShape() {
+    let bestLines = 0;
+    let candidates = [];
+    for (const shape of SHAPES) {
+      let shapeBest = 0;
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          if (!this.canPlace({ shape }, r, c)) continue;
+          const lines = this._linesIfPlaced(shape, r, c);
+          if (lines > shapeBest) shapeBest = lines;
+        }
+      }
+      if (shapeBest > bestLines) { bestLines = shapeBest; candidates = [shape]; }
+      else if (shapeBest === bestLines && bestLines > 0) candidates.push(shape);
+    }
+    return candidates.length ? pick(candidates) : null;
+  }
+
+  _linesIfPlaced(shape, row, col) {
+    const placed = new Set();
+    for (const [dr, dc] of shape) placed.add(`${row + dr},${col + dc}`);
+    let count = 0;
+    for (let r = 0; r < GRID_SIZE; r++) {
+      let full = true;
+      for (let c = 0; c < GRID_SIZE; c++) {
+        if (this.grid[r][c] === null && !placed.has(`${r},${c}`)) { full = false; break; }
+      }
+      if (full) count++;
+    }
+    for (let c = 0; c < GRID_SIZE; c++) {
+      let full = true;
+      for (let r = 0; r < GRID_SIZE; r++) {
+        if (this.grid[r][c] === null && !placed.has(`${r},${c}`)) { full = false; break; }
+      }
+      if (full) count++;
+    }
+    return count;
   }
 
   canPlace(piece, row, col) {
@@ -55,7 +110,7 @@ export class Game {
     if (this.score > this.highScore) this.highScore = this.score;
 
     if (this.pieces.every((p) => p === null)) {
-      this.pieces = [newPiece(), newPiece(), newPiece()];
+      this.pieces = [this._makePiece(), this._makePiece(), this._makePiece()];
     }
 
     if (this._noMovesAvailable()) this.gameOver = true;
@@ -120,7 +175,8 @@ export class Game {
     this.grid = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null));
     this.score = 0;
     this.highScore = prevHigh;
-    this.pieces = [newPiece(), newPiece(), newPiece()];
+    this.perfectChance = PERFECT_START;
+    this.pieces = [this._makePiece(), this._makePiece(), this._makePiece()];
     this.gameOver = false;
   }
 }

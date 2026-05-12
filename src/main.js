@@ -2,8 +2,9 @@
 // States: "home" -> "game" -> "game_over" -> "home"
 
 import { Game } from "./game.js";
-import { Renderer, WINDOW_W, WINDOW_H, GRID_BOTTOM_CENTER_Y } from "./renderer.js";
+import { Renderer, WINDOW_W, WINDOW_H, GRID_BOTTOM_CENTER_Y } from "./renderer.js?v=auth";
 import { Audio } from "./audio.js";
+import { signIn, signUp, signOut, watchAuth, authErrorMessage } from "./firebase.js?v=auth";
 
 const canvas = document.getElementById("game");
 
@@ -26,9 +27,12 @@ const game = new Game();
 const renderer = new Renderer(canvas);
 const audio = new Audio();
 
-let state = "home";
+// "auth" => login overlay visible (initial). Other states (home/game/...)
+// require a signed-in user; auth state changes flip us in or out of "auth".
+let state = "auth";
 let drag = null;
 let mousePos = { x: 0, y: 0 };
+let currentUser = null;
 
 
 function eventPos(ev) {
@@ -40,12 +44,18 @@ function eventPos(ev) {
 }
 
 function onMouseDown(ev) {
+  if (state === "auth") return; // overlay handles its own clicks
   ev.preventDefault();
   audio.init(); // satisfy autoplay gesture requirement on first click
   const pos = eventPos(ev);
   mousePos = pos;
 
   if (state === "home") {
+    if (renderer.hitLogoutButton(pos)) {
+      audio.play("pick");
+      signOut().catch(() => {});
+      return;
+    }
     const hit = renderer.hitHomeButton(pos);
     if (hit === "single") {
       game.reset();
@@ -188,8 +198,8 @@ function frame(now) {
     audio.play("game_over");
   }
 
-  if (state === "home") {
-    renderer.drawHome(mousePos);
+  if (state === "auth" || state === "home") {
+    renderer.drawHome(mousePos, currentUser);
   } else if (state === "multiplayer") {
     renderer.drawMultiplayer(mousePos);
   } else {
@@ -201,3 +211,73 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// ---------- auth UI ----------
+
+const overlay = document.getElementById("auth-overlay");
+const signinForm = document.getElementById("signin-form");
+const signupForm = document.getElementById("signup-form");
+const signinError = document.getElementById("signin-error");
+const signupError = document.getElementById("signup-error");
+
+function showForm(which) {
+  signinError.textContent = "";
+  signupError.textContent = "";
+  if (which === "signup") {
+    signinForm.classList.add("hidden");
+    signupForm.classList.remove("hidden");
+  } else {
+    signupForm.classList.add("hidden");
+    signinForm.classList.remove("hidden");
+  }
+}
+
+for (const btn of document.querySelectorAll("[data-go]")) {
+  btn.addEventListener("click", () => showForm(btn.dataset.go));
+}
+
+signinForm.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const submitBtn = signinForm.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+  signinError.textContent = "";
+  const fd = new FormData(signinForm);
+  try {
+    await signIn(fd.get("email").trim(), fd.get("password"));
+  } catch (err) {
+    signinError.textContent = authErrorMessage(err);
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+signupForm.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const submitBtn = signupForm.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+  signupError.textContent = "";
+  const fd = new FormData(signupForm);
+  try {
+    await signUp(fd.get("email").trim(), fd.get("password"), fd.get("displayName").trim());
+  } catch (err) {
+    signupError.textContent = authErrorMessage(err);
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+watchAuth((user) => {
+  currentUser = user;
+  if (user) {
+    overlay.classList.add("hidden");
+    if (state === "auth") state = "home";
+  } else {
+    overlay.classList.remove("hidden");
+    showForm("signin");
+    signinForm.reset();
+    signupForm.reset();
+    drag = null;
+    renderer.resetAnimations();
+    state = "auth";
+  }
+});

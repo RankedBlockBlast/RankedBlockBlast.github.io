@@ -96,6 +96,8 @@ export class Renderer {
     this._confirmButtons = this._layoutConfirmButtons();
     // HUD title click area — kept generous for touch.
     this._titleRect = { x: 0, y: 14, w: WINDOW_W * 0.7, h: 60 };
+    // Logout button rect on the home screen (centered, near the bottom).
+    this._logoutRect = { x: Math.floor(WINDOW_W / 2 - 70), y: WINDOW_H - 80, w: 140, h: 36 };
   }
 
   _layoutHomeButtons() {
@@ -173,6 +175,10 @@ export class Renderer {
     return null;
   }
 
+  hitLogoutButton(pos) {
+    return rectIn(this._logoutRect, pos.x, pos.y);
+  }
+
   hitContinueButton(pos) {
     return rectIn(this._continueButton, pos.x, pos.y);
   }
@@ -215,7 +221,7 @@ export class Renderer {
     this._drawTray(game, drag);
   }
 
-  drawHome(mousePos) {
+  drawHome(mousePos, user) {
     const ctx = this.ctx;
     ctx.fillStyle = rgb(BG);
     ctx.fillRect(0, 0, WINDOW_W, WINDOW_H);
@@ -248,11 +254,32 @@ export class Renderer {
       this._drawButton(rect, label, color, rectIn(rect, mousePos.x, mousePos.y));
     }
 
+    if (user) {
+      const name = (user.displayName || user.email || "player").toUpperCase();
+      this._drawGlowText(`SIGNED IN AS ${name}`, WINDOW_W / 2, WINDOW_H - 122,
+        HUD_CYAN, font(13), "center", 6);
+      this._drawSmallButton(this._logoutRect, "LOG OUT",
+        rectIn(this._logoutRect, mousePos.x, mousePos.y));
+    }
+
     ctx.font = font(16);
     ctx.fillStyle = rgb([90, 100, 140]);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("v 0 . 1", WINDOW_W / 2, WINDOW_H - 32);
+  }
+
+  _drawSmallButton(rect, label, hovered) {
+    const ctx = this.ctx;
+    const color = INVALID; // red-ish, distinct from main menu buttons
+    ctx.fillStyle = rgba(color, hovered ? 0.18 : 0.08);
+    rectPath(ctx, rect.x, rect.y, rect.w, rect.h, 6);
+    ctx.fill();
+    ctx.strokeStyle = rgba(color, hovered ? 1 : 0.7);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    this._drawGlowText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 1,
+      color, font(14), "center", hovered ? 10 : 6);
   }
 
   drawMultiplayer(mousePos) {

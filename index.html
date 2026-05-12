@@ -4,10 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Ranked Block Boom</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
   <canvas id="game" width="560" height="768"></canvas>
-  <script type="module" src="src/main.js"></script>
+
+  <div id="auth-overlay" class="hidden">
+    <form id="signin-form" class="auth-card">
+      <h1>SIGN IN</h1>
+      <input type="email" name="email" placeholder="email" autocomplete="email" required>
+      <input type="password" name="password" placeholder="password" autocomplete="current-password" required>
+      <div class="auth-error" id="signin-error"></div>
+      <button type="submit" class="btn-primary">SIGN IN</button>
+      <button type="button" class="btn-link" data-go="signup">need an account? sign up</button>
+    </form>
+
+    <form id="signup-form" class="auth-card hidden">
+      <h1>SIGN UP</h1>
+      <input type="text" name="displayName" placeholder="display name" autocomplete="nickname" required>
+      <input type="email" name="email" placeholder="email" autocomplete="email" required>
+      <input type="password" name="password" placeholder="password (min 6 chars)" autocomplete="new-password" required minlength="6">
+      <div class="auth-error" id="signup-error"></div>
+      <button type="submit" class="btn-primary">CREATE ACCOUNT</button>
+      <button type="button" class="btn-link" data-go="signin">already have an account? sign in</button>
+    </form>
+  </div>
+
+  <script type="module" src="src/main.js?v=auth"></script>
 </body>
 </html>
